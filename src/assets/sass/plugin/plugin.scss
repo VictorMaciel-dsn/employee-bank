@@ -1,0 +1,25 @@
+.p-float-label {
+    label {
+        font-size: var(--size);
+        display: flex;
+        margin-left: 1rem;
+        top: 2px;
+        background: var(--color-white);
+        color: var(--color-black-heavy);
+        padding: 0 2px;
+    }
+}
+
+svg.svg-inline--fa.fa-eye-slash {
+    left: 93%;
+    position: absolute;
+    top: 30%;
+    cursor: pointer;
+}
+
+svg.svg-inline--fa.fa-eye {
+    left: 93%;
+    position: absolute;
+    top: 30%;
+    cursor: pointer;
+}

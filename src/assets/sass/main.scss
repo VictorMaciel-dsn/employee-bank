@@ -1,0 +1,14 @@
+@import "bootstrap";
+@import "./core.scss";
+@import "./variables.scss";
+@import "./plugin.scss";
+
+html,
+body,
+#root,
+.main {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    font-family: "PoppinsRegular", "Rubik", sans-serif;
+}
