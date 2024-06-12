@@ -5,9 +5,12 @@ import "./assets/sass/main.scss";
 import ReactDOM from 'react-dom/client'
 import React from 'react'
 import App from './App.jsx'
+import { RecoilRoot } from "recoil";
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
+    <RecoilRoot>
+      <App />
+    </RecoilRoot>
+  </React.StrictMode>
+);

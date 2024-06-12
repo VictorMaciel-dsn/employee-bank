@@ -1,12 +1,23 @@
 import { FileUpload } from "primereact/fileupload";
 import { InputText } from "primereact/inputtext";
 import { SelectButton } from "primereact/selectbutton";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { Button, Modal, ModalBody, ModalFooter, ModalHeader } from "reactstrap";
+import { formatarCep, formatarCpf, formatarData } from "../../helpers/format";
+import * as FireBaseStorage from "firebase/storage";
+import { storage } from "../../services";
+import { get, getDatabase, ref, set } from "firebase/database";
 
-function ModalEmployees({ showModal, setShowModal, setListEmployees }) {
+function ModalEmployees({
+  showModal,
+  setShowModal,
+  setListEmployees,
+  setLoading,
+}) {
   const [img, setImg] = useState("");
+  const [getEmployees, setGetEmployees] = useState(true);
+  const cepInputRef = useRef(null);
   const optionsStatus = ["Inativo", "Ativo"];
 
   const [values, setValues] = useState({
@@ -25,10 +36,65 @@ function ModalEmployees({ showModal, setShowModal, setListEmployees }) {
     active: "",
   });
 
+  useEffect(() => {
+    if (values?.cep?.length === 9) {
+      buscarCEP();
+    }
+  }, [values?.cep]);
+
+  useEffect(() => {
+    if (getEmployees) {
+      setLoading(true);
+      getData()
+        .then((res) => {
+          if (res !== null) {
+            setListEmployees(res);
+            setLoading(false);
+            setGetEmployees(false);
+          }
+        })
+        .catch((error) => {
+          setLoading(false);
+          console.error("Erro ao obter os funcionários:", error);
+        });
+    }
+  }, [getEmployees]);
+
   const toggle = () => {
     setValues({});
+    setImg("");
     setShowModal(!showModal);
   };
+
+  const handleChangeCep = (e) => {
+    const _value = e.target.value;
+    const _valueFormated = formatarCep(_value);
+    setValues({ ...values, cep: _valueFormated });
+  };
+
+  const handleChangeCpf = (e) => {
+    const _value = e.target.value;
+    const _valueFormated = formatarCpf(_value);
+    setValues({ ...values, cpf: _valueFormated });
+  };
+
+  const handleChangeData = (e) => {
+    const _value = e.target.value;
+    const _valueFormated = formatarData(_value);
+    setValues({ ...values, hiringDate: _valueFormated });
+  };
+
+  async function getData() {
+    const db = getDatabase();
+    const dataRef = ref(db, "employees");
+
+    try {
+      const res = await get(dataRef);
+      return res.val();
+    } catch {
+      return null;
+    }
+  }
 
   function onSubmit(e) {
     e.preventDefault();
@@ -38,11 +104,78 @@ function ModalEmployees({ showModal, setShowModal, setListEmployees }) {
       return;
     }
 
-    console.log("Payload:", values);
-    setListEmployees((x) => [...x, values]);
-    setValues({});
-    setShowModal(!showModal);
-    toast.success("Funcionário cadastrado com sucesso!");
+    if (img) {
+      const file = img;
+      if (!file) return;
+      const storageRef = FireBaseStorage.ref(
+        storage,
+        `files/${values?.imageName}`
+      );
+      const uploadTask = FireBaseStorage.uploadBytesResumable(storageRef, file);
+
+      uploadTask.on("state_changed", () => {
+        FireBaseStorage.getDownloadURL(uploadTask.snapshot.ref).then((url) => {
+          onSave(url);
+        });
+      });
+    } else {
+      onSave(img);
+    }
+  }
+
+  async function onSave(img) {
+    const newValues = { ...values, image: img };
+    setValues(newValues);
+
+    const db = getDatabase();
+    const dataRef = ref(db, "employees");
+
+    try {
+      const snapshot = await get(dataRef);
+      const existingData = snapshot.exists() ? snapshot.val() : [];
+      const updatedList = [...existingData, newValues];
+
+      await set(dataRef, updatedList);
+      setListEmployees(updatedList);
+      setValues({});
+      setImg("");
+      setShowModal(!showModal);
+      toast.success("Funcionário cadastrado com sucesso!");
+    } catch (error) {
+      toast.error("Houve um erro ao cadastrar o funcionário!");
+    }
+  }
+
+  function buscarCEP() {
+    if (values?.cep) {
+      const validaCEP = /^[0-9]{8}$|^[0-9]{5}-[0-9]{3}$/;
+      if (validaCEP.test(values?.cep)) {
+        const _cep = values?.cep.replace(/\D/g, "");
+        const urlAPI = `https://viacep.com.br/ws/${_cep}/json/`;
+
+        fetch(urlAPI)
+          .then((response) => {
+            if (!response.ok) {
+              toast.error(`Erro na requisição: ${response.status}`);
+            }
+            return response.text();
+          })
+          .then((data) => {
+            const cleanResponse = data.replace(/\n/g, "").replace(/\\/g, "");
+            const dados = JSON.parse(cleanResponse);
+            setValues({
+              ...values,
+              neighborhood: dados.bairro,
+              city: dados.localidade,
+              street: dados.logradouro,
+              state: dados.uf,
+            });
+          });
+      } else {
+        toast.error("Formato do CEP inválido!");
+        cepInputRef.current.focus();
+      }
+    }
   }
 
   return (
@@ -69,13 +202,8 @@ function ModalEmployees({ showModal, setShowModal, setListEmployees }) {
                   mode="basic"
                   accept="image/*"
                   maxFileSize={1000000}
-                  chooseLabel={
-                    /* isEdit ? imgProdutoName :  */ "Escolha uma imagem"
-                  }
+                  chooseLabel="Escolha uma imagem"
                   onSelect={(e) => {
-                    // if (isEdit) {
-                    //   setNewImage(true);
-                    // }
                     setImg(e.files[0]);
                     const id = new Date().getTime() % 10000;
                     const extension = e.files[0].name.split(".").pop();
@@ -83,9 +211,11 @@ function ModalEmployees({ showModal, setShowModal, setListEmployees }) {
                       .split(".")
                       .slice(0, -1)
                       .join(".")}-${id}.${extension}`;
-                    // setImgName(fileName);
-                    setValues({ ...values, imageName: fileName });
-                    setValues({ ...values, image: e.files[0].objectURL });
+                    setValues({
+                      ...values,
+                      imageName: fileName,
+                      image: e.files[0].objectURL,
+                    });
                   }}
                 />
               </div>
@@ -141,9 +271,7 @@ function ModalEmployees({ showModal, setShowModal, setListEmployees }) {
                       required
                       className="input-form w-100"
                       value={values.cpf}
-                      onChange={(e) =>
-                        setValues({ ...values, cpf: e.target.value })
-                      }
+                      onChange={handleChangeCpf}
                     />
                     <label>CPF</label>
                   </span>
@@ -154,12 +282,9 @@ function ModalEmployees({ showModal, setShowModal, setListEmployees }) {
                   <span className="p-float-label">
                     <InputText
                       required
-                      // type="date"
                       className="input-form w-100"
                       value={values.hiringDate}
-                      onChange={(e) =>
-                        setValues({ ...values, hiringDate: e.target.value })
-                      }
+                      onChange={handleChangeData}
                     />
                     <label>Data de contratação</label>
                   </span>
@@ -174,9 +299,8 @@ function ModalEmployees({ showModal, setShowModal, setListEmployees }) {
                       required
                       className="input-form w-100"
                       value={values.cep}
-                      onChange={(e) =>
-                        setValues({ ...values, cep: e.target.value })
-                      }
+                      ref={cepInputRef}
+                      onChange={handleChangeCep}
                     />
                     <label>CEP</label>
                   </span>

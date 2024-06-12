@@ -6,21 +6,29 @@ import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 import imgLogo from "../../assets/img/logo.png";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../../services";
+import { useSetRecoilState } from "recoil";
+import { currentUser } from "../../atoms/user";
 
 function LoginPage() {
   const [valueEmail, setValueEmail] = useState("");
   const [valuePassword, setValuePassword] = useState("");
   const [openEye, setOpenEye] = useState(false);
   const navigate = useNavigate();
+  const setUser = useSetRecoilState(currentUser);
 
   function login(e) {
     e.preventDefault();
 
-    if (valueEmail === "adm" && valuePassword === "123") {
-      navigate("/home");
-    } else {
-      toast.error("Usuário ou senha inválidos!");
-    }
+    signInWithEmailAndPassword(auth, valueEmail, valuePassword)
+      .then((res) => {
+        setUser(res.user);
+        navigate("/home");
+      })
+      .catch(() => {
+        toast.error("Houve um erro ao realizar o login!");
+      });
   }
 
   return (
